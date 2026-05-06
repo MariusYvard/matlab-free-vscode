@@ -1,0 +1,74 @@
+/**
+ * FigurePanel.ts — matlab-free-vscode
+ * Panneau Webview pour les figures 2D (SVG via gnuplot).
+ */
+import * as vscode from 'vscode'
+import * as fs     from 'fs'
+
+export class FigurePanel {
+    static readonly panels = new Map<number, FigurePanel>()
+
+    static show(handle: number, svgPath: string): void {
+        const col      = vscode.ViewColumn.Beside
+        const existing = FigurePanel.panels.get(handle)
+        if (existing) { existing.update(svgPath); existing.panel.reveal(col, true); return }
+        const panel = vscode.window.createWebviewPanel('mfvFigure', `Figure ${handle}`, col, {
+            enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [],
+        })
+        const fp = new FigurePanel(panel, handle)
+        fp.update(svgPath)
+        FigurePanel.panels.set(handle, fp)
+        panel.onDidDispose(() => FigurePanel.panels.delete(handle))
+    }
+
+    static refresh(handle: number, svgPath: string): void {
+        const fp = FigurePanel.panels.get(handle)
+        if (!fp) { FigurePanel.show(handle, svgPath); return }
+        if (!fs.existsSync(svgPath)) return
+        const svg = fs.readFileSync(svgPath, 'utf8')
+            .replace(/<\?xml[^>]*\?>/g, '').replace(/<!DOCTYPE[^>]*>/g, '').trim()
+        fp.panel.webview.postMessage({ type: 'update', svg })
+    }
+
+    private constructor(private readonly panel: vscode.WebviewPanel, private readonly handle: number) {}
+
+    update(svgPath: string): void {
+        if (!fs.existsSync(svgPath)) return
+        const svg = fs.readFileSync(svgPath, 'utf8')
+            .replace(/<\?xml[^>]*\?>/g, '').replace(/<!DOCTYPE[^>]*>/g, '').trim()
+        this.panel.title = `Figure ${this.handle}`
+        this.panel.webview.html = this.buildHtml(svg, svgPath)
+    }
+
+    private buildHtml(svgContent: string, svgPath: string): string {
+        const mtime = fs.statSync(svgPath).mtimeMs.toFixed(0)
+        return `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:;">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1e1e1e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:monospace}
+#toolbar{position:fixed;top:0;left:0;right:0;background:#2d2d2d;border-bottom:1px solid #444;display:flex;align-items:center;gap:8px;padding:4px 10px;z-index:10}
+#toolbar button{background:#3c3c3c;border:1px solid #555;color:#ccc;padding:3px 10px;border-radius:3px;cursor:pointer;font-size:12px}
+#fig-wrap{margin-top:36px;padding:12px;max-width:100vw;overflow:auto}
+#fig-wrap svg{max-width:100%;height:auto;background:white;border-radius:2px}
+#fig-inner{transform-origin:top left;transition:transform 0.15s}
+</style></head><body>
+<div id="toolbar">
+  <button onclick="zoom(1.2)">+ Zoom</button>
+  <button onclick="zoom(1/1.2)">- Zoom</button>
+  <button onclick="reset()">Reset</button>
+  <button onclick="saveSvg()">SVG</button>
+  <span style="color:#888;font-size:11px;margin-left:auto">Figure ${this.handle}</span>
+</div>
+<div id="fig-wrap"><div id="fig-inner">${svgContent}</div></div>
+<script>
+let scale=1; const inner=document.getElementById('fig-inner');
+function zoom(f){scale=Math.max(0.2,Math.min(8,scale*f));inner.style.transform='scale('+scale+')';}
+function reset(){scale=1;inner.style.transform='scale(1)';}
+function saveSvg(){const b=new Blob([inner.innerHTML],{type:'image/svg+xml'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='figure_${this.handle}.svg';a.click();}
+document.addEventListener('wheel',e=>{if(e.ctrlKey){e.preventDefault();zoom(e.deltaY<0?1.1:1/1.1);}},{passive:false});
+window.addEventListener('message',e=>{if(e.data?.type==='update'&&e.data.svg)inner.innerHTML=e.data.svg;});
+</script></body></html>`
+    }
+}
