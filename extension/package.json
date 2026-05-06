@@ -1,0 +1,75 @@
+{
+  "name": "matlab-free-vscode",
+  "displayName": "MATLAB / Octave (Free)",
+  "description": "Code MATLAB/Octave gratuitement dans VS Code et Antigravity — sans licence MATLAB.",
+  "version": "0.1.0",
+  "publisher": "MariusYvard",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MariusYvard/matlab-free-vscode"
+  },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages", "Visualization", "Other"],
+  "keywords": ["matlab", "octave", "free", "antigravity", "3d", "vrml"],
+  "activationEvents": [
+    "onLanguage:matlab",
+    "onLanguage:octave",
+    "workspaceContains:**/*.m"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "matlab",
+        "aliases": ["MATLAB", "Octave", "matlab", "octave"],
+        "extensions": [".m"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "matlab",
+        "scopeName": "source.matlab",
+        "path": "./syntaxes/matlab.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      { "command": "matlab-free.runSelection", "title": "MATLAB: Executer la selection", "icon": "$(play)" },
+      { "command": "matlab-free.runFile",      "title": "MATLAB: Executer le fichier",   "icon": "$(run-all)" },
+      { "command": "matlab-free.restart",      "title": "MATLAB: Redemarrer la session Octave" }
+    ],
+    "keybindings": [
+      { "command": "matlab-free.runSelection", "key": "ctrl+enter",       "mac": "cmd+enter",       "when": "editorTextFocus && editorLangId == 'matlab'" },
+      { "command": "matlab-free.runFile",      "key": "ctrl+shift+enter", "mac": "cmd+shift+enter", "when": "editorTextFocus && editorLangId == 'matlab'" }
+    ],
+    "menus": {
+      "editor/title/run": [{ "command": "matlab-free.runFile", "when": "editorLangId == 'matlab'", "group": "navigation" }],
+      "editor/context":   [{ "command": "matlab-free.runSelection", "when": "editorLangId == 'matlab'", "group": "1_run" }]
+    },
+    "configuration": {
+      "title": "MATLAB Free (Octave)",
+      "properties": {
+        "matlab-free.octavePath":           { "type": "string",  "default": "octave", "description": "Chemin vers le binaire octave" },
+        "matlab-free.showFiguresInWebview": { "type": "boolean", "default": true,     "description": "Afficher les figures dans des panneaux Webview" },
+        "matlab-free.defaultColormap":      { "type": "string",  "default": "jet", "enum": ["jet","hot","cool","gray","parula","viridis"], "description": "Colormap par defaut" },
+        "matlab-free.extraPath":            { "type": "array",   "items": { "type": "string" }, "default": [], "description": "Dossiers supplementaires au path Octave" }
+      }
+    }
+  },
+  "scripts": {
+    "compile":  "tsc -p tsconfig.json",
+    "watch":    "tsc -watch -p tsconfig.json",
+    "package":  "npx vsce package --no-dependencies",
+    "lint":     "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node":   "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce":  "^2.22.0",
+    "typescript":    "^5.3.0"
+  }
+}
