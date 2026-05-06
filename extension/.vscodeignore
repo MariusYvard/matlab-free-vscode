@@ -1,0 +1,14 @@
+src/**
+tsconfig.json
+test/**
+**/*.test.ts
+**/*.spec.ts
+node_modules/**
+!node_modules/vscode-languageclient/**
+.github/**
+.gitignore
+*.md
+!README.md
+.eslintrc*
+.prettierrc*
+webpack.config.*
