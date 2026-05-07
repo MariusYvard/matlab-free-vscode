@@ -27,8 +27,9 @@ jobs:
           octave --no-gui --eval "
             % Tests headless : on ne peut pas afficher de GUI,
             % mais on peut vérifier que les fonctions existent et s'exécutent.
-            addpath('runtime');
-            run('runtime/startup.m');
+            cd('${GITHUB_WORKSPACE}');
+            addpath(fullfile(pwd(), 'runtime'));
+            run(fullfile(pwd(), 'runtime', 'startup.m'));
             x = 0:0.1:1;
             try, plot(x, x.^2); disp('plot OK'); catch e, error(e.message); end
             try, bar([1 2 3]);   disp('bar OK');  catch e, error(e.message); end
@@ -109,5 +110,4 @@ jobs:
             - Auto-détection d'Octave sur Windows
             - Output channel dédié pour la sortie Octave
 
-            ## Prérequis
-            - [GNU Octave ≥ 7.0](https://octave.org/download)
+            ##
