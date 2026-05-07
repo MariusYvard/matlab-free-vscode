@@ -7,7 +7,36 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install GNU Octave
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y octave
+
+      - name: Run compatibility tests
+        run: octave --no-gui --eval "run('test/test_compat.m')"
+
+      - name: Run figure interception tests (headless)
+        run: |
+          octave --no-gui --eval "
+            % Tests headless : on ne peut pas afficher de GUI,
+            % mais on peut vérifier que les fonctions existent et s'exécutent.
+            addpath('runtime');
+            run('runtime/startup.m');
+            x = 0:0.1:1;
+            try, plot(x, x.^2); disp('plot OK'); catch e, error(e.message); end
+            try, bar([1 2 3]);   disp('bar OK');  catch e, error(e.message); end
+            disp('All headless figure tests passed.')
+          "
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,7 +65,7 @@ jobs:
       - name: Package VSIX
         run: npm run package
 
-      - name: Upload artifact
+      - name: Upload artifact (PR / push sans tag)
         uses: actions/upload-artifact@v4
         with:
           name: matlab-free-vscode-${{ github.sha }}
@@ -61,3 +90,24 @@ jobs:
         with:
           files: '*.vsix'
           generate_release_notes: true
+          body: |
+            ## Installation
+
+            1. Téléchargez le fichier `.vsix` ci-dessous
+            2. Dans VS Code / Antigravity : `Ctrl+Shift+P` → **Extensions: Install from VSIX**
+            3. Configurez `matlab-free.octavePath` si Octave n'est pas dans votre PATH
+               (sur Windows, la détection automatique est tentée en priorité)
+
+            ## Nouveautés v0.2.0
+
+            - Variable Explorer : panneau des variables du workspace en temps réel
+            - Export PNG dans les panneaux 2D et 3D
+            - Plein écran pour les figures 3D
+            - contour, contourf, quiver, quiver3, semilogy, semilogx, loglog...
+            - Signature Help (paramètres de fonction en temps réel)
+            - Complétion des champs de struct et des fonctions utilisateur
+            - Auto-détection d'Octave sur Windows
+            - Output channel dédié pour la sortie Octave
+
+            ## Prérequis
+            - [GNU Octave ≥ 7.0](https://octave.org/download)
