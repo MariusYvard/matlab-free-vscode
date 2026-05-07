@@ -2,7 +2,7 @@
   "name": "matlab-free-vscode",
   "displayName": "MATLAB / Octave (Free)",
   "description": "Code MATLAB/Octave gratuitement dans VS Code et Antigravity — sans licence MATLAB.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "MariusYvard",
   "license": "MIT",
   "repository": {
@@ -35,25 +35,89 @@
       }
     ],
     "commands": [
-      { "command": "matlab-free.runSelection", "title": "MATLAB: Executer la selection", "icon": "$(play)" },
-      { "command": "matlab-free.runFile",      "title": "MATLAB: Executer le fichier",   "icon": "$(run-all)" },
-      { "command": "matlab-free.restart",      "title": "MATLAB: Redemarrer la session Octave" }
+      {
+        "command": "matlab-free.runSelection",
+        "title": "MATLAB: Exécuter la sélection",
+        "icon": "$(play)"
+      },
+      {
+        "command": "matlab-free.runFile",
+        "title": "MATLAB: Exécuter le fichier",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "matlab-free.restart",
+        "title": "MATLAB: Redémarrer la session Octave"
+      },
+      {
+        "command": "matlab-free.showVariableExplorer",
+        "title": "MATLAB: Afficher le Variable Explorer",
+        "icon": "$(symbol-variable)"
+      },
+      {
+        "command": "matlab-free.clearWorkspace",
+        "title": "MATLAB: Effacer le workspace (clear all)"
+      },
+      {
+        "command": "matlab-free.showOutput",
+        "title": "MATLAB: Afficher la sortie Octave"
+      }
     ],
     "keybindings": [
-      { "command": "matlab-free.runSelection", "key": "ctrl+enter",       "mac": "cmd+enter",       "when": "editorTextFocus && editorLangId == 'matlab'" },
-      { "command": "matlab-free.runFile",      "key": "ctrl+shift+enter", "mac": "cmd+shift+enter", "when": "editorTextFocus && editorLangId == 'matlab'" }
+      {
+        "command": "matlab-free.runSelection",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && editorLangId == 'matlab'"
+      },
+      {
+        "command": "matlab-free.runFile",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorTextFocus && editorLangId == 'matlab'"
+      }
     ],
     "menus": {
-      "editor/title/run": [{ "command": "matlab-free.runFile", "when": "editorLangId == 'matlab'", "group": "navigation" }],
-      "editor/context":   [{ "command": "matlab-free.runSelection", "when": "editorLangId == 'matlab'", "group": "1_run" }]
+      "editor/title/run": [
+        {
+          "command": "matlab-free.runFile",
+          "when": "editorLangId == 'matlab'",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "matlab-free.runSelection",
+          "when": "editorLangId == 'matlab'",
+          "group": "1_run"
+        }
+      ]
     },
     "configuration": {
       "title": "MATLAB Free (Octave)",
       "properties": {
-        "matlab-free.octavePath":           { "type": "string",  "default": "octave", "description": "Chemin vers le binaire octave" },
-        "matlab-free.showFiguresInWebview": { "type": "boolean", "default": true,     "description": "Afficher les figures dans des panneaux Webview" },
-        "matlab-free.defaultColormap":      { "type": "string",  "default": "jet", "enum": ["jet","hot","cool","gray","parula","viridis"], "description": "Colormap par defaut" },
-        "matlab-free.extraPath":            { "type": "array",   "items": { "type": "string" }, "default": [], "description": "Dossiers supplementaires au path Octave" }
+        "matlab-free.octavePath": {
+          "type": "string",
+          "default": "octave",
+          "description": "Chemin vers le binaire octave (ex: /usr/bin/octave ou C:\\Octave\\bin\\octave.exe)"
+        },
+        "matlab-free.showFiguresInWebview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Afficher les figures dans des panneaux Webview intégrés à VS Code"
+        },
+        "matlab-free.defaultColormap": {
+          "type": "string",
+          "default": "jet",
+          "enum": ["jet", "hot", "cool", "gray", "parula", "viridis"],
+          "description": "Colormap par défaut pour les figures 3D"
+        },
+        "matlab-free.extraPath": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Dossiers supplémentaires ajoutés au path Octave au démarrage"
+        }
       }
     }
   },
