@@ -73,7 +73,7 @@ export class OctaveSession implements vscode.Disposable {
             '--eval', initScript,
         ], {
             stdio: ['pipe', 'pipe', 'pipe'],
-            env:   { ...process.env, OCTAVE_HISTFILE: '/dev/null' },
+            env:   { ...process.env, OCTAVE_HISTFILE: '/dev/null', MFV_OCTAVE_BIN: octavePath },
         })
 
         if (!this.proc.pid) {
@@ -182,20 +182,36 @@ export class OctaveSession implements vscode.Disposable {
 
     // ── Auto-détection Octave sous Windows ───────────────────────────────
     private static detectOctaveWindows(): string | null {
-        const programFiles = [
+        const searchRoots = [
             process.env['ProgramFiles']      ?? 'C:\\Program Files',
             process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)',
+            path.join(process.env['LOCALAPPDATA'] ?? 'C:\\Users\\Default\\AppData\\Local', 'Programs'),
+            'C:\\',
         ]
-        for (const root of programFiles) {
-            const octaveRoot = path.join(root, 'GNU Octave')
+        
+        for (const root of searchRoots) {
+            const octaveRoot = root === 'C:\\' ? 'C:\\Octave' : path.join(root, 'GNU Octave')
             if (!fs.existsSync(octaveRoot)) continue
+            
+            const subdirs = ['mingw64\\bin', 'ucrt64\\bin', 'bin']
+            
+            // 1. Cherche dans une installation directe (ex: C:\Octave\mingw64\bin\octave-cli.exe)
+            for (const sub of subdirs) {
+                const candidate = path.join(octaveRoot, sub, 'octave-cli.exe')
+                if (fs.existsSync(candidate)) return candidate
+            }
+
+            // 2. Cherche dans une installation versionnée (ex: C:\Program Files\GNU Octave\Octave-10.1.0\...)
             const versions = fs.readdirSync(octaveRoot)
                 .filter(d => d.startsWith('Octave-'))
                 .sort()
                 .reverse()
+                
             for (const ver of versions) {
-                const candidate = path.join(octaveRoot, ver, 'mingw64', 'bin', 'octave-cli.exe')
-                if (fs.existsSync(candidate)) return candidate
+                for (const sub of subdirs) {
+                    const candidate = path.join(octaveRoot, ver, sub, 'octave-cli.exe')
+                    if (fs.existsSync(candidate)) return candidate
+                }
             }
         }
         return null
