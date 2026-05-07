@@ -94,20 +94,16 @@ jobs:
           body: |
             ## Installation
 
+            1. Download the `.vsix` file below
+            2. In VS Code / Antigravity: `Ctrl+Shift+P` → **Extensions: Install from VSIX**
+            3. On Windows, Octave is auto-detected. Otherwise, set `matlab-free.octavePath` in settings.
+
+            See the full [README](https://github.com/MariusYvard/matlab-free-vscode#readme) for documentation.
+
+            ---
+
+            ## Installation (Français)
+
             1. Téléchargez le fichier `.vsix` ci-dessous
             2. Dans VS Code / Antigravity : `Ctrl+Shift+P` → **Extensions: Install from VSIX**
-            3. Configurez `matlab-free.octavePath` si Octave n'est pas dans votre PATH
-               (sur Windows, la détection automatique est tentée en priorité)
-
-            ## Nouveautés v0.2.0
-
-            - Variable Explorer : panneau des variables du workspace en temps réel
-            - Export PNG dans les panneaux 2D et 3D
-            - Plein écran pour les figures 3D
-            - contour, contourf, quiver, quiver3, semilogy, semilogx, loglog...
-            - Signature Help (paramètres de fonction en temps réel)
-            - Complétion des champs de struct et des fonctions utilisateur
-            - Auto-détection d'Octave sur Windows
-            - Output channel dédié pour la sortie Octave
-
-            ##
+            3. Sous Windows, Octave est détecté automatiquement. Sinon, configurez `matlab-free.octavePath`.

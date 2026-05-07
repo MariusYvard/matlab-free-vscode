@@ -1,8 +1,8 @@
 {
   "name": "matlab-free-vscode",
   "displayName": "MATLAB / Octave (Free)",
-  "description": "Code MATLAB/Octave gratuitement dans VS Code et Antigravity — sans licence MATLAB.",
-  "version": "0.2.1",
+  "description": "Run MATLAB/Octave code for free in VS Code — no license needed. Inline 2D/3D figures, LSP, autocompletion. | Codez MATLAB gratuitement dans VS Code.",
+  "version": "0.3.0",
   "publisher": "MariusYvard",
   "license": "MIT",
   "repository": {
@@ -11,7 +11,7 @@
   },
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Programming Languages", "Visualization", "Other"],
-  "keywords": ["matlab", "octave", "free", "antigravity", "3d", "vrml"],
+  "keywords": ["matlab", "octave", "free", "scientific", "3d", "plotting", "figures", "vrml", "lsp", "antigravity"],
   "activationEvents": [
     "onLanguage:matlab",
     "onLanguage:octave",

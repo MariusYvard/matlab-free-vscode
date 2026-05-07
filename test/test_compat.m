@@ -1,5 +1,5 @@
-%% test_compat.m â matlab-free-vscode
-%  VÃ©rifie que les correctifs de compatibilitÃ© MATLABâOctave dans
+%% test_compat.m — matlab-free-vscode
+%  Verifie que les correctifs de compatibilite MATLAB->Octave dans
 %  octave_compat.m fonctionnent correctement.
 %  Usage : octave --no-gui --eval "run('test/test_compat.m')"
 
@@ -21,38 +21,38 @@ function result = test_case(name, expr_fn)
     end
 end
 
-%% ââ Test 1 : norm2 ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+%% -- Test 1 : norm2 -------------------------------------------------------
 ok = test_case('norm2 disponible', @() assert(norm2([3 4]) == 5));
 if ok, passed++; else failed++; end
 
-%% ââ Test 2 : norm2 sur matrice (lignes) ââââââââââââââââââââââââââââââââââ
+%% -- Test 2 : norm2 sur matrice (lignes) -----------------------------------
 ok = test_case('norm2 matrice', @() assert(all(abs(norm2([3 4; 0 1]) - [5;1]) < 1e-10)));
 if ok, passed++; else failed++; end
 
-%% ââ Test 3 : norme_vecteur ââââââââââââââââââââââââââââââââââââââââââââââââ
+%% -- Test 3 : norme_vecteur ------------------------------------------------
 ok = test_case('norme_vecteur disponible', @() assert(norm(norme_vecteur([3 4]) - [0.6 0.8]) < 1e-10));
 if ok, passed++; else failed++; end
 
-%% ââ Test 4 : norme_vecteur normalisation ââââââââââââââââââââââââââââââââââ
+%% -- Test 4 : norme_vecteur normalisation ----------------------------------
 ok = test_case('norme_vecteur unitaire', @() assert(abs(norm(norme_vecteur([1 2 3])) - 1) < 1e-10));
 if ok, passed++; else failed++; end
 
-%% ââ Test 5 : distance_points ââââââââââââââââââââââââââââââââââââââââââââââ
+%% -- Test 5 : distance_points ---------------------------------------------
 ok = test_case('distance_points disponible', @() assert(abs(distance_points([0 0], [3 4]) - 5) < 1e-10));
 if ok, passed++; else failed++; end
 
-%% ââ Test 6 : distance_points symÃ©trique ââââââââââââââââââââââââââââââââââ
-ok = test_case('distance_points symÃ©trie', @() ...
+%% -- Test 6 : distance_points symetrique -----------------------------------
+ok = test_case('distance_points symetrie', @() ...
     assert(abs(distance_points([1 2], [4 6]) - distance_points([4 6], [1 2])) < 1e-10));
 if ok, passed++; else failed++; end
 
-%% ââ Test 7 : distance_points auto (un seul argument) ââââââââââââââââââââ
+%% -- Test 7 : distance_points auto (un seul argument) ----------------------
 ok = test_case('distance_points auto D(i,j)=D(j,i)', @() ...
     assert(all(all(abs(distance_points([0 0; 1 0; 0 1]) - ...
                        distance_points([0 0; 1 0; 0 1])') < 1e-10))));
 if ok, passed++; else failed++; end
 
-%% ââ Test 8 : recherche_points_proche alias âââââââââââââââââââââââââââââââ
+%% -- Test 8 : recherche_points_proche alias --------------------------------
 % Seulement si recherche_points_proche_v2 est disponible dans le dossier
 if exist('recherche_points_proche_v2', 'file')
     ok = test_case('recherche_points_proche alias', @() ...
@@ -62,8 +62,8 @@ else
     fprintf('  SKIP  recherche_points_proche (recherche_points_proche_v2 absent)\n');
 end
 
-%% ââ Bilan âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-fprintf('\n%d tests passÃ©s, %d Ã©chouÃ©s.\n', passed, failed);
+%% -- Bilan -----------------------------------------------------------------
+fprintf('\n%d tests passed, %d failed.\n', passed, failed);
 if failed > 0
-    error('Des tests de compatibilitÃ© ont Ã©chouÃ©.');
+    error('Some compatibility tests failed.');
 end
