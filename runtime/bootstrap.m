@@ -196,71 +196,71 @@ function varargout = scatter3(varargin)
 end
 
 %% ── Éclairage ────────────────────────────────────────────────────────────
-function camlight(varargin)
-    builtin('camlight', varargin{:});
+function varargout = camlight(varargin)
+    [varargout{1:nargout}] = builtin('camlight', varargin{:});
     __mfv_notify__(struct('type','camlight'));
 end
-function lighting(mode)
-    if nargin < 1, mode = 'phong'; end
-    builtin('lighting', mode);
-    __mfv_notify__(struct('type','lighting','mode',mode));
+function varargout = lighting(varargin)
+    if nargin < 1, varargin = {'phong'}; end
+    [varargout{1:nargout}] = builtin('lighting', varargin{:});
+    __mfv_notify__(struct('type','lighting','mode',varargin{1}));
 end
 
 %% ── Axes & refresh ───────────────────────────────────────────────────────
-function axis(varargin)
-    builtin('axis', varargin{:});
+function varargout = axis(varargin)
+    [varargout{1:nargout}] = builtin('axis', varargin{:});
     if nargin > 0 && ischar(varargin{1})
         __mfv_notify__(struct('type','axis','mode',varargin{1}));
     end
 end
-function drawnow(varargin)
-    builtin('drawnow', varargin{:});
+function varargout = drawnow(varargin)
+    [varargout{1:nargout}] = builtin('drawnow', varargin{:});
     __mfv_notify__(struct('type','drawnow'));
 end
-function title(varargin)
-    builtin('title', varargin{:});
+function varargout = title(varargin)
+    [varargout{1:nargout}] = builtin('title', varargin{:});
     if nargin > 0 && ischar(varargin{1})
         __mfv_notify__(struct('type','title','text',varargin{1}));
     end
 end
-function xlabel(varargin)
-    builtin('xlabel', varargin{:});
+function varargout = xlabel(varargin)
+    [varargout{1:nargout}] = builtin('xlabel', varargin{:});
 end
-function ylabel(varargin)
-    builtin('ylabel', varargin{:});
+function varargout = ylabel(varargin)
+    [varargout{1:nargout}] = builtin('ylabel', varargin{:});
 end
-function zlabel(varargin)
-    builtin('zlabel', varargin{:});
+function varargout = zlabel(varargin)
+    [varargout{1:nargout}] = builtin('zlabel', varargin{:});
 end
-function legend(varargin)
-    builtin('legend', varargin{:});
+function varargout = legend(varargin)
+    [varargout{1:nargout}] = builtin('legend', varargin{:});
 end
-function grid(varargin)
-    builtin('grid', varargin{:});
+function varargout = grid(varargin)
+    [varargout{1:nargout}] = builtin('grid', varargin{:});
 end
-function hold(varargin)
-    builtin('hold', varargin{:});
+function varargout = hold(varargin)
+    [varargout{1:nargout}] = builtin('hold', varargin{:});
 end
-function subplot(varargin)
-    builtin('subplot', varargin{:});
+function varargout = subplot(varargin)
+    [varargout{1:nargout}] = builtin('subplot', varargin{:});
 end
-function figure(varargin)
-    builtin('figure', varargin{:});
+function varargout = figure(varargin)
+    [varargout{1:nargout}] = builtin('figure', varargin{:});
 end
-function clf(varargin)
-    builtin('clf', varargin{:});
+function varargout = clf(varargin)
+    [varargout{1:nargout}] = builtin('clf', varargin{:});
 end
-function close(varargin)
-    builtin('close', varargin{:});
+function varargout = close(varargin)
+    [varargout{1:nargout}] = builtin('close', varargin{:});
 end
-function xlim(varargin)
-    builtin('xlim', varargin{:});
+function varargout = xlim(varargin)
+    [varargout{1:nargout}] = builtin('xlim', varargin{:});
 end
-function ylim(varargin)
-    builtin('ylim', varargin{:});
+function varargout = ylim(varargin)
+    [varargout{1:nargout}] = builtin('ylim', varargin{:});
 end
-function zlim(varargin)
-    builtin('zlim', varargin{:});
+function varargout = zlim(varargin)
+    [varargout{1:nargout}] = builtin('zlim', varargin{:});
 end
 
 %% ── Variable Explorer ─────────────────────────────────────────────────────
@@ -295,26 +295,4 @@ function __mfv_send_workspace__()
     end
 end
 
-%% ── Helpers privés ───────────────────────────────────────────────────────
-function __mfv_capture_svg__(h)
-    p = fullfile(tempdir(), ['mfv_fig_' num2str(h) '.svg']);
-    try
-        print(h, p, '-dsvg', '-r0');
-        __mfv_notify__(struct('type','figure','path',p,'handle',h));
-    catch
-    end
-end
-
-function __mfv_send_surf__(varargin)
-    global __mfv_colormap__;
-    if nargin >= 3 && isnumeric(varargin{1})
-        X = varargin{1}; Y = varargin{2}; Z = varargin{3};
-    else
-        return
-    end
-    payload = struct('type','3d','kind','surf','X',X,'Y',Y,'Z',Z, ...
-                     'colormap',__mfv_colormap__);
-    p = __mfv_tmpjson__('surf');
-    __mfv_write_json__(p, payload);
-    __mfv_notify__(struct('type','surf','json',p));
-end
+%% ── Helpers privés ───────────────────────────────────────────────────�
