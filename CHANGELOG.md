@@ -2,6 +2,11 @@
 
 All notable changes to **matlab-free-vscode** are documented here.
 
+## [0.3.1] — 2026-05-07
+
+### 🔧 Fixed
+- **Missing dependencies**: fixed a critical bug where `node_modules` were omitted from the VSIX package due to a misconfigured build script (`--no-dependencies`). This was causing the extension to fail to activate with the error `Cannot find module 'vscode-languageclient/node'`.
+
 ## [0.3.0] — 2026-05-07
 
 ### 🔧 Fixed
