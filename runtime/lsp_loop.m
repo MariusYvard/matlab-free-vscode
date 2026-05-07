@@ -2,31 +2,27 @@
 %  Boucle LSP JSON-RPC complète exécutée par OctaveSession.ts au démarrage.
 %  Implémente le protocole Language Server Protocol (LSP) via stdin/stdout.
 %
-%  Messages entrants  : Content-Length: N
-
-{JSON-RPC}
-%  Messages sortants  : Content-Length: N
-
-{JSON-RPC}
-%  Notifications MFV  : 
-__MFV__{JSON}__MFV__
-  (bootstrap.m)
+%  Messages entrants  : Content-Length: N\r\n\r\n{JSON-RPC}
+%  Messages sortants  : Content-Length: N\r\n\r\n{JSON-RPC}
+%  Notifications MFV  : \n__MFV__{JSON}__MFV__\n  (bootstrap.m)
 %
 %  Méthodes LSP supportées :
 %    initialize / initialized / shutdown / exit
 %    textDocument/didOpen, didChange, didClose, didSave
-%    textDocument/completion
+%    textDocument/completion      (built-in + struct fields + fonctions utilisateur)
+%    textDocument/signatureHelp   (signature de la fonction courante)
 %    textDocument/hover
 %    textDocument/definition
 %    textDocument/publishDiagnostics  (côté serveur → client)
-%    octave/runCode                   (méthode custom : exécute du code)
+%    octave/runCode                   (méthode custom : exécute du code + workspace)
 
 function __mfv_lsp_loop__()
 
 %% ── État de la session ───────────────────────────────────────────────────
-files      = struct();   % uri → texte source
-initialized = false;
+files        = struct();   % uri → texte source
+initialized  = false;
 shutdown_req = false;
+workspace_dir = '';        % répertoire de travail pour scan des .m utilisateur
 
 %% ── Boucle principale ────────────────────────────────────────────────────
 while ~shutdown_req
@@ -35,12 +31,12 @@ while ~shutdown_req
     content_length = 0;
     while true
         line = fgetl(stdin);
-        if isequal(line, -1)   % EOF → quitte proprement
+        if isequal(line, -1)
             return;
         end
         line = strtrim(line);
         if isempty(line)
-            break;             % ligne vide = fin des headers
+            break;
         end
         if strncmpi(line, 'Content-Length:', 15)
             content_length = str2double(strtrim(line(16:end)));
@@ -72,6 +68,14 @@ while ~shutdown_req
         % ── Cycle de vie ──────────────────────────────────────────────
         case 'initialize'
             initialized = true;
+            % Récupère le répertoire racine du workspace
+            if isfield(msg.params, 'rootUri') && ~isempty(msg.params.rootUri)
+                workspace_dir = strrep(msg.params.rootUri, 'file:///', '');
+                workspace_dir = strrep(workspace_dir, 'file://', '');
+                if ispc()
+                    workspace_dir = strrep(workspace_dir, '/', filesep());
+                end
+            end
             response = __lsp_response__(msg, __lsp_capabilities__());
 
         case 'initialized'
@@ -79,7 +83,7 @@ while ~shutdown_req
 
         case 'shutdown'
             shutdown_req = true;
-            response = __lsp_response__(msg, []); % null result
+            response = __lsp_response__(msg, []);
 
         case 'exit'
             return;
@@ -103,6 +107,8 @@ while ~shutdown_req
                 end
                 files.(uri2key(uri)) = text;
             end
+            % Les diagnostics sont déclenchés uniquement à la sauvegarde
+            % pour ne pas spawner un processus Octave à chaque frappe.
 
         case 'textDocument/didClose'
             key = uri2key(msg.params.textDocument.uri);
@@ -130,10 +136,22 @@ while ~shutdown_req
             if isfield(files, key), text = files.(key); end
 
             prefix = __extract_prefix__(text, pos.line, pos.character);
-            items  = __lsp_completions__(prefix);
+            items  = __lsp_completions__(prefix, workspace_dir);
             response = __lsp_response__(msg, struct( ...
                 'isIncomplete', false, ...
                 'items', items));
+
+        % ── Signature Help ────────────────────────────────────────────
+        case 'textDocument/signatureHelp'
+            pos  = msg.params.position;
+            uri  = msg.params.textDocument.uri;
+            key  = uri2key(uri);
+            text = '';
+            if isfield(files, key), text = files.(key); end
+
+            funcname = __extract_call_context__(text, pos.line, pos.character);
+            result   = __lsp_signature_help__(funcname);
+            response = __lsp_response__(msg, result);
 
         % ── Hover ─────────────────────────────────────────────────────
         case 'textDocument/hover'
@@ -166,7 +184,6 @@ while ~shutdown_req
             % Pas de réponse : les sorties arrivent via __mfv_notify__
 
         otherwise
-            % Méthode inconnue → erreur standard LSP
             if isfield(msg, 'id')
                 response = __lsp_error__(msg, -32601, 'Method not found');
             end
@@ -186,12 +203,9 @@ end % __mfv_lsp_loop__
 %% ═══════════════════════════════════════════════════════════════════════════
 
 function __lsp_send__(obj)
-    body = jsonencode(obj);
-    % Comptage byte-accurate (important pour UTF-8)
+    body  = jsonencode(obj);
     bytes = uint8(body);
-    fprintf(stdout, 'Content-Length: %d
-
-', length(bytes));
+    fprintf(stdout, 'Content-Length: %d\r\n\r\n', length(bytes));
     fwrite(stdout, bytes);
     fflush(stdout);
 end
@@ -222,37 +236,168 @@ function caps = __lsp_capabilities__()
                 'resolveProvider',   false, ...
                 'triggerCharacters', {{'.', '('}} ...
             ), ...
+            'signatureHelpProvider', struct( ...
+                'triggerCharacters',   {{'(', ','}}, ...
+                'retriggerCharacters', {{','}} ...
+            ), ...
             'hoverProvider',      true, ...
             'definitionProvider', true  ...
         ), ...
         'serverInfo', struct( ...
             'name',    'matlab-free-vscode (Octave)', ...
-            'version', '0.1.0' ...
+            'version', '0.2.0' ...
         ) ...
     );
 end
 
-%% ── Complétion via completion_matches() ────────────────────────────────────
-function items = __lsp_completions__(prefix)
+%% ── Complétion enrichie ────────────────────────────────────────────────────
+function items = __lsp_completions__(prefix, workspace_dir)
+    items_list = {};
+
+    % ── Détection complétion de champ de struct (ex: "s.fi")
+    dot_idx = find(prefix == '.', 1, 'last');
+    if ~isempty(dot_idx) && dot_idx > 1
+        varname   = prefix(1:dot_idx-1);
+        field_pfx = prefix(dot_idx+1:end);
+        try
+            fields = evalin('base', ['fieldnames(' varname ')']);
+            for k = 1:length(fields)
+                f = fields{k};
+                if strncmp(f, field_pfx, length(field_pfx))
+                    items_list{end+1} = struct( ...
+                        'label',      [varname '.' f], ...
+                        'insertText', f, ...
+                        'kind',       5, ...   % 5 = Field
+                        'detail',     'struct field' ...
+                    );
+                end
+            end
+        catch
+        end
+        % Si on a trouvé des champs, on les retourne directement
+        if ~isempty(items_list)
+            items = __items_to_struct__(items_list);
+            return
+        end
+    end
+
+    % ── Complétion built-in via completion_matches
+    builtin_matches = {};
     try
-        matches = completion_matches(prefix);
+        raw = completion_matches(prefix);
+        if ischar(raw)
+            builtin_matches = strsplit(strtrim(raw), '\n');
+        elseif iscell(raw)
+            builtin_matches = raw;
+        end
+        builtin_matches = builtin_matches(~cellfun(@isempty, builtin_matches));
     catch
-        matches = {};
+    end
+    for k = 1:length(builtin_matches)
+        m = builtin_matches{k};
+        items_list{end+1} = struct( ...
+            'label',      m, ...
+            'insertText', m, ...
+            'kind',       3, ...   % 3 = Function
+            'detail',     'built-in' ...
+        );
     end
 
-    if ischar(matches)
-        matches = strsplit(strtrim(matches), '
-');
+    % ── Complétion des fonctions utilisateur (fichiers .m du workspace)
+    if ~isempty(workspace_dir) && exist(workspace_dir, 'dir')
+        try
+            m_files = dir(fullfile(workspace_dir, '**', '*.m'));
+            for k = 1:length(m_files)
+                [~, fname] = fileparts(m_files(k).name);
+                if strncmp(fname, prefix, length(prefix)) && ...
+                   ~any(strcmp(fname, builtin_matches))
+                    items_list{end+1} = struct( ...
+                        'label',      fname, ...
+                        'insertText', fname, ...
+                        'kind',       3, ...
+                        'detail',     'user function' ...
+                    );
+                end
+            end
+        catch
+        end
     end
-    matches = matches(~cellfun(@isempty, matches));
 
-    items = struct( ...
-        'label',      matches, ...
-        'kind',       num2cell(repmat(3, length(matches), 1)), ...
-        'insertText', matches ...
-    );
-    if isempty(items)
-        items = struct([]);
+    % ── Complétion des variables du workspace
+    try
+        ws_vars = evalin('base', 'who()');
+        for k = 1:length(ws_vars)
+            v = ws_vars{k};
+            if strncmp(v, prefix, length(prefix)) && ...
+               ~any(cellfun(@(x) strcmp(x.label, v), items_list))
+                items_list{end+1} = struct( ...
+                    'label',      v, ...
+                    'insertText', v, ...
+                    'kind',       6, ...   % 6 = Variable
+                    'detail',     'workspace' ...
+                );
+            end
+        end
+    catch
+    end
+
+    items = __items_to_struct__(items_list);
+end
+
+function s = __items_to_struct__(items_list)
+    if isempty(items_list)
+        s = struct([]);
+    else
+        s = [items_list{:}];
+    end
+end
+
+%% ── Signature Help ──────────────────────────────────────────────────────────
+function result = __lsp_signature_help__(funcname)
+    result = struct('signatures', {{}}, 'activeSignature', 0, 'activeParameter', 0);
+    if isempty(funcname), return; end
+    try
+        [~, txt] = system(['octave --no-gui --eval "help ' funcname '" 2>&1']);
+        txt = strtrim(txt);
+        if isempty(txt), return; end
+
+        % Extrait la première ligne de signature (commence souvent par le nom de la fonction)
+        lines = strsplit(txt, '\n');
+        sig_line = '';
+        for i = 1:min(10, length(lines))
+            l = strtrim(lines{i});
+            % Cherche la ligne qui ressemble à une signature : "funcname(...)"
+            if ~isempty(regexp(l, ['^' funcname '\s*\('], 'once')) || ...
+               ~isempty(regexp(l, ['^\[.*\]\s*=\s*' funcname '\s*\('], 'once'))
+                sig_line = l;
+                break;
+            end
+        end
+        if isempty(sig_line)
+            sig_line = lines{1};
+        end
+
+        % Extrait les paramètres depuis les parenthèses
+        params = {};
+        tok = regexp(sig_line, '\(([^)]*)\)', 'tokens', 'once');
+        if ~isempty(tok) && ~isempty(tok{1})
+            param_strs = strsplit(tok{1}, ',');
+            for k = 1:length(param_strs)
+                p = strtrim(param_strs{k});
+                if ~isempty(p)
+                    params{end+1} = struct('label', p);
+                end
+            end
+        end
+
+        doc = strjoin(lines(1:min(5,end)), '\n');
+        sig = struct( ...
+            'label',         sig_line, ...
+            'documentation', struct('kind','markdown','value',['```\n' doc '\n```']), ...
+            'parameters',    {params} ...
+        );
+        result = struct('signatures', {{sig}}, 'activeSignature', 0, 'activeParameter', 0);
+    catch
     end
 end
 
@@ -261,14 +406,16 @@ function result = __lsp_hover__(word)
     result = [];
     if isempty(word), return; end
     try
-        [~, txt] = system(['octave --no-gui --eval "help ' word '" 2>/dev/null']);
-        if ~isempty(strtrim(txt))
+        [~, txt] = system(['octave --no-gui --eval "help ' word '" 2>&1']);
+        txt = strtrim(txt);
+        if ~isempty(txt)
+            % Limite à 20 lignes pour ne pas surcharger l'infobulle
+            lines = strsplit(txt, '\n');
+            snippet = strjoin(lines(1:min(20,end)), '\n');
             result = struct( ...
                 'contents', struct( ...
                     'kind',  'markdown', ...
-                    'value', ['``
-' strtrim(txt) '
-``'] ...
+                    'value', ['```\n' snippet '\n```'] ...
                 ) ...
             );
         end
@@ -283,9 +430,11 @@ function result = __lsp_definition__(word)
     try
         filepath = strtrim(which(word));
         if ~isempty(filepath) && exist(filepath, 'file')
-            uri = ['file:///' strrep(filepath, '\', '/')];
-            if ~strncmp(uri, 'file:////', 9)
-                uri = strrep(uri, 'file:///', 'file:///');
+            % Normalise l'URI selon la plateforme
+            if ispc()
+                uri = ['file:///' strrep(filepath, '\', '/')];
+            else
+                uri = ['file://' filepath];
             end
             result = struct( ...
                 'uri',   uri, ...
@@ -299,21 +448,25 @@ function result = __lsp_definition__(word)
     end
 end
 
-%% ── Diagnostics via octave --check-syntax ──────────────────────────────────
+%% ── Diagnostics (cross-platform) ────────────────────────────────────────────
 function __lsp_publish_diagnostics__(uri, text)
     diagnostics = {};
     try
-        tmpf = [tempdir() 'mfv_check_' num2str(floor(time()*1000)) '.m'];
+        % Écrit le texte dans un fichier temporaire
+        tmpf = fullfile(tempdir(), ['mfv_check_' num2str(floor(time()*1000)) '.m']);
         fid  = fopen(tmpf, 'w');
         fprintf(fid, '%s', text);
         fclose(fid);
 
-        [~, out] = system(['octave --no-gui --eval "source(''' ...
-            strrep(tmpf, '\', '/') ''')" 2>&1']);
+        % Lance la vérification : redirige stderr vers stdout pour capture
+        % (2>&1 fonctionne sur Unix, Windows CMD et PowerShell)
+        octave_cmd = ['octave --no-gui --norc --eval "source(' ...
+                      '''' strrep(tmpf, '\', '/') ''')" 2>&1'];
+        [~, out] = system(octave_cmd);
         delete(tmpf);
 
-        lines = strsplit(out, '
-');
+        % Parse les erreurs/warnings
+        lines = strsplit(out, '\n');
         for i = 1:length(lines)
             line = strtrim(lines{i});
             if strncmpi(line, 'error:', 6) || strncmpi(line, 'warning:', 8)
@@ -321,7 +474,7 @@ function __lsp_publish_diagnostics__(uri, text)
                 msg  = line;
                 lnum = 0;
 
-                tok = regexp(line, 'lines+(d+)', 'tokens');
+                tok = regexp(line, 'line\s+(\d+)', 'tokens');
                 if ~isempty(tok)
                     lnum = str2double(tok{1}{1}) - 1;
                 end
@@ -354,12 +507,17 @@ function __lsp_publish_diagnostics__(uri, text)
     __lsp_send__(notif);
 end
 
-%% ── Exécution de code utilisateur ──────────────────────────────────────────
+%% ── Exécution de code + envoi workspace ────────────────────────────────────
 function __lsp_run_code__(code)
     try
         evalin('base', code);
     catch e
         __mfv_notify__(struct('type', 'error', 'message', e.message));
+    end
+    % Toujours mettre à jour le Variable Explorer après exécution
+    try
+        __mfv_send_workspace__();
+    catch
     end
 end
 
@@ -372,34 +530,52 @@ function key = uri2key(uri)
 end
 
 function prefix = __extract_prefix__(text, line_idx, char_idx)
+    % Extrait le préfixe courant (mot partiel, avec possibilité de "struct.")
     prefix = '';
     if isempty(text), return; end
-    lines = strsplit(text, '
-');
+    lines = strsplit(text, '\n');
     if line_idx + 1 > length(lines), return; end
     cur_line = lines{line_idx + 1};
     if char_idx > length(cur_line)
         char_idx = length(cur_line);
     end
     segment = cur_line(1:char_idx);
-    tok = regexp(segment, '[w.]+$', 'match');
+    % Préfixe = dernier token alphanumérique + point (pour les structs)
+    tok = regexp(segment, '[\w\.]+$', 'match');
     if ~isempty(tok)
         prefix = tok{end};
+    end
+end
+
+function funcname = __extract_call_context__(text, line_idx, char_idx)
+    % Extrait le nom de la fonction devant le '(' courant pour signatureHelp.
+    funcname = '';
+    if isempty(text), return; end
+    lines = strsplit(text, '\n');
+    if line_idx + 1 > length(lines), return; end
+    cur_line = lines{line_idx + 1};
+    if char_idx > length(cur_line)
+        char_idx = length(cur_line);
+    end
+    segment = cur_line(1:char_idx);
+    % Cherche le dernier "nom(" avant la position
+    tok = regexp(segment, '(\w+)\s*\([^)]*$', 'tokens');
+    if ~isempty(tok)
+        funcname = tok{end}{1};
     end
 end
 
 function word = __word_at__(text, line_idx, char_idx)
     word = '';
     if isempty(text), return; end
-    lines = strsplit(text, '
-');
+    lines = strsplit(text, '\n');
     if line_idx + 1 > length(lines), return; end
     cur_line = lines{line_idx + 1};
     if char_idx > length(cur_line)
         char_idx = length(cur_line);
     end
-    matches = regexp(cur_line, 'w+', 'match');
-    starts  = regexp(cur_line, 'w+', 'start');
+    matches = regexp(cur_line, '\w+', 'match');
+    starts  = regexp(cur_line, '\w+', 'start');
     for i = 1:length(matches)
         s = starts(i);
         e = s + length(matches{i}) - 1;
@@ -413,9 +589,7 @@ end
 %% ── Helper notification MFV ──────────────────────────────────────────────────
 function __mfv_notify__(payload)
     try
-        fprintf(stdout, '
-__MFV__%s__MFV__
-', jsonencode(payload));
+        fprintf(stdout, '\n__MFV__%s__MFV__\n', jsonencode(payload));
         fflush(stdout);
     catch
     end
