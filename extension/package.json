@@ -2,7 +2,7 @@
   "name": "matlab-free-vscode",
   "displayName": "MATLAB / Octave (Free)",
   "description": "Run MATLAB/Octave code for free in VS Code — no license needed. Inline 2D/3D figures, LSP, autocompletion. | Codez MATLAB gratuitement dans VS Code.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "MariusYvard",
   "license": "MIT",
   "repository": {
