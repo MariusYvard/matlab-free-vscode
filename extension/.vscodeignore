@@ -1,14 +1,26 @@
+## Exclure du VSIX tout ce qui n'est pas nécessaire à l'exécution
+
+# Sources TypeScript (on ne garde que le JS compilé)
 src/**
 tsconfig.json
+
+# Tests
 test/**
 **/*.test.ts
 **/*.spec.ts
+
+# Dev deps
 node_modules/**
 !node_modules/vscode-languageclient/**
+
+# Config CI et git
 .github/**
 .gitignore
 *.md
 !README.md
+
+# Misc
 .eslintrc*
 .prettierrc*
 webpack.config.*
+node_modules/**

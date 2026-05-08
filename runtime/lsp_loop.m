@@ -357,7 +357,7 @@ function result = __lsp_signature_help__(funcname)
     result = struct('signatures', {{}}, 'activeSignature', 0, 'activeParameter', 0);
     if isempty(funcname), return; end
     try
-        [~, txt] = system([__get_octave_bin__() ' --no-gui --eval "help ' funcname '" 2>&1']);
+        [~, txt] = system(['octave --no-gui --eval "help ' funcname '" 2>&1']);
         txt = strtrim(txt);
         if isempty(txt), return; end
 
@@ -406,7 +406,7 @@ function result = __lsp_hover__(word)
     result = [];
     if isempty(word), return; end
     try
-        [~, txt] = system([__get_octave_bin__() ' --no-gui --eval "help ' word '" 2>&1']);
+        [~, txt] = system(['octave --no-gui --eval "help ' word '" 2>&1']);
         txt = strtrim(txt);
         if ~isempty(txt)
             % Limite à 20 lignes pour ne pas surcharger l'infobulle
@@ -460,7 +460,7 @@ function __lsp_publish_diagnostics__(uri, text)
 
         % Lance la vérification : redirige stderr vers stdout pour capture
         % (2>&1 fonctionne sur Unix, Windows CMD et PowerShell)
-        octave_cmd = [__get_octave_bin__() ' --no-gui --norc --eval "source(' ...
+        octave_cmd = ['octave --no-gui --norc --eval "source(' ...
                       '''' strrep(tmpf, '\', '/') ''')" 2>&1'];
         [~, out] = system(octave_cmd);
         delete(tmpf);
@@ -592,15 +592,5 @@ function __mfv_notify__(payload)
         fprintf(stdout, '\n__MFV__%s__MFV__\n', jsonencode(payload));
         fflush(stdout);
     catch
-    end
-end
-
-%% ── Helper Octave Bin ────────────────────────────────────────────────────────
-function cmd = __get_octave_bin__()
-    cmd = getenv('MFV_OCTAVE_BIN');
-    if isempty(cmd)
-        cmd = 'octave';
-    else
-        cmd = ['"' cmd '"'];
     end
 end

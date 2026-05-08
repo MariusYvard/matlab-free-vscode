@@ -1,41 +1,41 @@
-/**
- * OctaveSession.ts — matlab-free-vscode
- * Démarre Octave, charge le runtime, sépare le flux LSP / MFV,
- * et expose les streams attendus par vscode-languageclient.
- */
-
-import * as vscode  from 'vscode'
-import * as cp      from 'child_process'
-import * as path    from 'path'
-import * as fs      from 'fs'
+import * as vscode from 'vscode'
+import * as cp from 'child_process'
+import * as path from 'path'
+import * as fs from 'fs'
+import * as net from 'net'
 import { PassThrough } from 'stream'
 import { MsgParser, MfvMessage } from './MsgParser'
-import { FigurePanel }           from './FigurePanel'
-import { ThreeDPanel }           from './ThreeDPanel'
+import { FigurePanel } from './FigurePanel'
+import { ThreeDPanel } from './ThreeDPanel'
 import { VariableExplorerPanel } from './VariableExplorerPanel'
 
 export class OctaveSession implements vscode.Disposable {
-    private proc:    cp.ChildProcess | null = null
-    private parser:  MsgParser
-    private outCh:   vscode.OutputChannel
+    private lspProc: cp.ChildProcess | null = null
+    private execProc: cp.ChildProcess | null = null
+    private parser: MsgParser
+    private outCh: vscode.OutputChannel
+    private tcpServer: net.Server | null = null
+    private tcpPort: number = 0
 
-    /** Stream LSP lu par vscode-languageclient (stdout filtré d'Octave) */
     public lspOut = new PassThrough()
-    /** Stream LSP écrit par vscode-languageclient → stdin Octave */
-    public lspIn  = new PassThrough()
+    public lspIn = new PassThrough()
+
+    private isDisposed = false
 
     constructor(private readonly ctx: vscode.ExtensionContext) {
         this.parser = new MsgParser()
-        this.outCh  = vscode.window.createOutputChannel('Octave', { log: false } as any)
+        this.outCh = vscode.window.createOutputChannel('Octave', { log: false } as any)
+        
+        // Listen to parser events
+        this.parser.on('mfv', (msg: MfvMessage) => this.dispatch(msg))
+        this.parser.on('text', (txt: string) => this.logOutput(txt))
+        // 'lsp' event is no longer emitted by parser since LSP has its own process
     }
 
     async start(): Promise<boolean> {
-        const cfg        = vscode.workspace.getConfiguration('matlab-free')
-        let   octavePath = cfg.get<string>('octavePath', 'octave')
-        const extraPaths = cfg.get<string[]>('extraPath', [])
-        const runtimeDir = path.join(this.ctx.extensionPath, 'runtime')
+        const cfg = vscode.workspace.getConfiguration('matlab-free')
+        let octavePath = cfg.get<string>('octavePath', 'octave')
 
-        // ── Auto-détection d'Octave sur Windows ───────────────────────────
         if (octavePath === 'octave' && process.platform === 'win32') {
             const detected = OctaveSession.detectOctaveWindows()
             if (detected) {
@@ -44,107 +44,139 @@ export class OctaveSession implements vscode.Disposable {
             }
         }
 
-        const startupM = path.join(runtimeDir, 'startup.m').replace(/\\/g, '/')
-        const lspLoopM = path.join(runtimeDir, 'lsp_loop.m').replace(/\\/g, '/')
+        // Start TCP Server for MFV Messages
+        await this.startTcpServer()
 
-        if (!fs.existsSync(startupM)) {
-            vscode.window.showErrorMessage(
-                `matlab-free: runtime introuvable dans "${runtimeDir}". ` +
-                'Réinstallez l\'extension.')
+        const okLsp = this.startLspProcess(octavePath, cfg)
+        const okExec = this.startExecProcess(octavePath, cfg)
+
+        if (!okLsp || !okExec) {
             return false
         }
 
-        const addpaths = [runtimeDir, ...extraPaths]
-            .map(p => `addpath('${p.replace(/\\/g, '/')}');`)
-            .join(' ')
+        return true
+    }
 
-        const initScript = [
-            addpaths,
-            `run('${startupM}');`,
-            `source('${lspLoopM}');`,
-            `__mfv_lsp_loop__();`,
-        ].join(' ')
+    private async startTcpServer(): Promise<void> {
+        return new Promise((resolve) => {
+            this.tcpServer = net.createServer((socket) => {
+                socket.on('data', (data) => {
+                    // Feed TCP data directly to parser
+                    this.parser.feed(data)
+                })
+            })
+            this.tcpServer.listen(0, '127.0.0.1', () => {
+                this.tcpPort = (this.tcpServer?.address() as net.AddressInfo).port
+                resolve()
+            })
+        })
+    }
 
-        this.proc = cp.spawn(octavePath, [
-            '--no-gui',
-            '--no-line-editing',
-            '--quiet',
-            '--no-history',
-            '--eval', initScript,
+    private startLspProcess(octavePath: string, cfg: vscode.WorkspaceConfiguration): boolean {
+        const runtimeDir = path.join(this.ctx.extensionPath, 'runtime')
+        const lspLoopM = path.join(runtimeDir, 'lsp_loop.m').replace(/\\/g, '/')
+        
+        if (!fs.existsSync(lspLoopM)) {
+            vscode.window.showErrorMessage(`matlab-free: runtime introuvable. Réinstallez l'extension.`)
+            return false
+        }
+
+        const extraPaths = cfg.get<string[]>('extraPath', [])
+        const addpaths = [runtimeDir, ...extraPaths].map(p => `addpath('${p.replace(/\\/g, '/')}');`).join(' ')
+        const initScript = `${addpaths} source('${lspLoopM}'); __mfv_lsp_loop__();`
+
+        this.lspProc = cp.spawn(octavePath, [
+            '--no-gui', '--no-line-editing', '--quiet', '--no-history', '--eval', initScript
         ], {
             stdio: ['pipe', 'pipe', 'pipe'],
-            env:   { ...process.env, OCTAVE_HISTFILE: '/dev/null', MFV_OCTAVE_BIN: octavePath },
+            env: { 
+                ...process.env, 
+                OCTAVE_HISTFILE: '/dev/null',
+                MFV_TCP_PORT: this.tcpPort.toString()
+            }
         })
 
-        if (!this.proc.pid) {
-            vscode.window.showErrorMessage(
-                `matlab-free: impossible de démarrer Octave à "${octavePath}". ` +
-                'Vérifiez le paramètre matlab-free.octavePath dans les settings.')
+        if (!this.lspProc.pid) {
+            vscode.window.showErrorMessage(`matlab-free: impossible de démarrer LSP à "${octavePath}".`)
             return false
         }
 
-        // ── Routage stdout ────────────────────────────────────────────────
-        this.proc.stdout!.on('data', (chunk: Buffer) => this.parser.feed(chunk))
+        // Direct pipe for LSP
+        this.lspProc.stdout!.on('data', (d) => this.lspOut.write(d))
+        this.lspIn.on('data', (d) => this.lspProc?.stdin?.writable && this.lspProc.stdin.write(d))
+        this.lspProc.stderr!.on('data', (d) => this.logError(`[LSP] ${d.toString()}`))
 
-        this.parser.on('lsp',  (data: Buffer)    => this.lspOut.write(data))
-        this.parser.on('mfv',  (msg: MfvMessage) => this.dispatch(msg))
-        this.parser.on('text', (txt: string)     => this.logOutput(txt))
-
-        // ── stdin LSP → Octave ────────────────────────────────────────────
-        this.lspIn.on('data', (chunk: Buffer) => {
-            this.proc?.stdin?.writable && this.proc.stdin.write(chunk)
-        })
-
-        // ── Stderr → output channel ───────────────────────────────────────
-        this.proc.stderr!.on('data', (d: Buffer) => this.logError(d.toString()))
-
-        this.proc.on('exit', code => {
-            if (code !== 0) {
-                this.logError(`\n[matlab-free] Octave arrêté (code ${code})\n`)
-                vscode.window.showWarningMessage(
-                    `matlab-free: Octave s'est arrêté (code ${code}). ` +
-                    'Utilisez "MATLAB: Redémarrer" pour relancer.')
-            }
+        this.lspProc.on('exit', code => {
+            if (!this.isDisposed) this.logError(`\n[LSP] Processus arrêté (code ${code})\n`)
         })
 
         return true
     }
 
-    /** Exécute une commande arbitraire dans la session Octave. */
-    sendCommand(code: string): void {
-        if (!this.proc?.stdin?.writable) return
-        const req = JSON.stringify({
-            jsonrpc: '2.0',
-            method:  'octave/runCode',
-            params:  { code },
+    private startExecProcess(octavePath: string, cfg: vscode.WorkspaceConfiguration): boolean {
+        const runtimeDir = path.join(this.ctx.extensionPath, 'runtime')
+        const startupM = path.join(runtimeDir, 'startup.m').replace(/\\/g, '/')
+        
+        const extraPaths = cfg.get<string[]>('extraPath', [])
+        const addpaths = [runtimeDir, ...extraPaths].map(p => `addpath('${p.replace(/\\/g, '/')}');`).join(' ')
+        const initScript = `${addpaths} run('${startupM}');`
+
+        this.execProc = cp.spawn(octavePath, [
+            '--no-gui', '--no-line-editing', '--quiet', '--no-history', '--eval', initScript
+        ], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { 
+                ...process.env, 
+                OCTAVE_HISTFILE: '/dev/null',
+                MFV_TCP_PORT: this.tcpPort.toString() // Pass TCP port
+            }
         })
-        const header = `Content-Length: ${Buffer.byteLength(req)}\r\n\r\n`
-        this.proc.stdin.write(header + req)
+
+        if (!this.execProc.pid) {
+            vscode.window.showErrorMessage(`matlab-free: impossible de démarrer le moteur d'exécution.`)
+            return false
+        }
+
+        // Stdout fallback routing (if TCP fails) and normal disp() output
+        this.execProc.stdout!.on('data', (chunk: Buffer) => this.parser.feed(chunk))
+        this.execProc.stderr!.on('data', (d: Buffer) => this.logError(d.toString()))
+
+        this.execProc.on('exit', code => {
+            if (this.isDisposed) return
+            this.logError(`\n[matlab-free] Moteur d'exécution arrêté (code ${code}). Auto-redémarrage...\n`)
+            // Auto-Healing: restart execution engine silently
+            setTimeout(() => {
+                if (!this.isDisposed) {
+                    this.startExecProcess(octavePath, cfg)
+                    vscode.window.showInformationMessage('matlab-free : Moteur d\'exécution redémarré (Auto-Healing).')
+                }
+            }, 1000)
+        })
+
+        return true
+    }
+
+    sendCommand(code: string): void {
+        if (!this.execProc?.stdin?.writable) {
+            vscode.window.showWarningMessage('matlab-free : le moteur d\'exécution n\'est pas prêt.')
+            return
+        }
+        
+        // We use a pseudo-JSONRPC payload to execute code if Octave is running a listen loop,
+        // OR we can just feed code directly to stdin if we are not running lsp_loop on execProc.
+        // Wait, if execProc doesn't run lsp_loop, it doesn't parse JSON-RPC!
+        // To fix this, we just write the raw code to execProc stdin + newline!
+        // But let's wrap it in an eval or just write it.
+        this.execProc.stdin.write(code + '\n')
     }
 
     private dispatch(msg: MfvMessage): void {
         switch (msg.type) {
-            case 'figure':
-                FigurePanel.show(msg.handle ?? 1, msg.path)
-                break
-            case 'patch':
-            case 'surf':
-            case '3d':
-                ThreeDPanel.show(`fig_${Date.now()}`, msg as any)
-                break
-            case 'colormap':
-            case 'colorbar':
-            case 'camlight':
-            case 'lighting':
-                ThreeDPanel.broadcast(msg)
-                break
-            case 'title':
-                ThreeDPanel.setTitle(msg.text ?? '')
-                break
-            case 'workspace':
-                // Mise à jour du Variable Explorer (push = non-bloquant)
-                VariableExplorerPanel.push(msg.vars ?? [])
-                break
+            case 'figure': FigurePanel.show(msg.handle ?? 1, msg.path); break;
+            case 'patch': case 'surf': case '3d': ThreeDPanel.show(`fig_${Date.now()}`, msg as any); break;
+            case 'colormap': case 'colorbar': case 'camlight': case 'lighting': ThreeDPanel.broadcast(msg); break;
+            case 'title': ThreeDPanel.setTitle(msg.text ?? ''); break;
+            case 'workspace': VariableExplorerPanel.push(msg.vars ?? []); break;
             case 'error':
                 this.logError(`[Octave] ${msg.message}\n`)
                 vscode.window.showErrorMessage(`Octave: ${msg.message}`)
@@ -152,66 +184,45 @@ export class OctaveSession implements vscode.Disposable {
         }
     }
 
-    /** Affiche la sortie standard Octave (disp, fprintf…) dans l'output channel. */
     private logOutput(text: string): void {
         if (text.trim()) {
             this.outCh.append(text)
-            this.outCh.show(true) // preserveFocus
+            this.outCh.show(true)
         }
     }
 
-    /** Affiche les erreurs Octave en rouge dans l'output channel. */
     private logError(text: string): void {
         this.outCh.append(text)
     }
 
-    /** Log interne d'extension (debug). */
     private log(text: string): void {
         this.outCh.append(text)
     }
 
-    /** Retourne l'output channel pour que extension.ts puisse l'afficher. */
     get outputChannel(): vscode.OutputChannel { return this.outCh }
 
     dispose(): void {
-        this.proc?.kill()
+        this.isDisposed = true
+        this.lspProc?.kill()
+        this.execProc?.kill()
+        this.tcpServer?.close()
         this.lspOut.destroy()
         this.lspIn.destroy()
         this.outCh.dispose()
     }
 
-    // ── Auto-détection Octave sous Windows ───────────────────────────────
     private static detectOctaveWindows(): string | null {
-        const searchRoots = [
-            process.env['ProgramFiles']      ?? 'C:\\Program Files',
+        const programFiles = [
+            process.env['ProgramFiles'] ?? 'C:\\Program Files',
             process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)',
-            path.join(process.env['LOCALAPPDATA'] ?? 'C:\\Users\\Default\\AppData\\Local', 'Programs'),
-            'C:\\',
         ]
-        
-        for (const root of searchRoots) {
-            const octaveRoot = root === 'C:\\' ? 'C:\\Octave' : path.join(root, 'GNU Octave')
+        for (const root of programFiles) {
+            const octaveRoot = path.join(root, 'GNU Octave')
             if (!fs.existsSync(octaveRoot)) continue
-            
-            const subdirs = ['mingw64\\bin', 'ucrt64\\bin', 'bin']
-            
-            // 1. Cherche dans une installation directe (ex: C:\Octave\mingw64\bin\octave-cli.exe)
-            for (const sub of subdirs) {
-                const candidate = path.join(octaveRoot, sub, 'octave-cli.exe')
-                if (fs.existsSync(candidate)) return candidate
-            }
-
-            // 2. Cherche dans une installation versionnée (ex: C:\Program Files\GNU Octave\Octave-10.1.0\...)
-            const versions = fs.readdirSync(octaveRoot)
-                .filter(d => d.startsWith('Octave-'))
-                .sort()
-                .reverse()
-                
+            const versions = fs.readdirSync(octaveRoot).filter(d => d.startsWith('Octave-')).sort().reverse()
             for (const ver of versions) {
-                for (const sub of subdirs) {
-                    const candidate = path.join(octaveRoot, ver, sub, 'octave-cli.exe')
-                    if (fs.existsSync(candidate)) return candidate
-                }
+                const candidate = path.join(octaveRoot, ver, 'mingw64', 'bin', 'octave-cli.exe')
+                if (fs.existsSync(candidate)) return candidate
             }
         }
         return null

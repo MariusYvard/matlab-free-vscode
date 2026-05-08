@@ -22,8 +22,21 @@
     ["'", "'"],
     ["\"", "\""]
   ],
+  "folding": {
+    "markers": {
+      "start": "^\\s*%\\s*#?region\\b",
+      "end":   "^\\s*%\\s*#?endregion\\b"
+    }
+  },
+  "wordPattern": "(-?\\d*\\.\\d\\w*)|([^\\`\\~\\!\\@\\#\\%\\^\\&\\*\\(\\)\\-\\=\\+\\[\\{\\]\\}\\\\\\|\\;\\:\\'\\\"\\,\\.\\<\\>\\/\\?\\s]+)",
   "indentationRules": {
     "increaseIndentPattern": "^\\s*(function|if|elseif|else|for|parfor|while|switch|case|otherwise|try|catch|classdef|properties|methods|events|enumeration)\\b.*$",
     "decreaseIndentPattern": "^\\s*(end|elseif|else|catch|otherwise)\\b"
-  }
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*(function|if|for|while|switch|try|classdef).*$",
+      "action": { "indent": "indent" }
+    }
+  ]
 }

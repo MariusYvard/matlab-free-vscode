@@ -1,17 +1,30 @@
 {
   "name": "matlab-free-vscode",
   "displayName": "MATLAB / Octave (Free)",
-  "description": "Run MATLAB/Octave code for free in VS Code — no license needed. Inline 2D/3D figures, LSP, autocompletion. | Codez MATLAB gratuitement dans VS Code.",
-  "version": "0.3.3",
+  "description": "Code MATLAB/Octave gratuitement dans VS Code et Antigravity — sans licence MATLAB.",
+  "version": "0.2.0",
   "publisher": "MariusYvard",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/MariusYvard/matlab-free-vscode"
   },
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Programming Languages", "Visualization", "Other"],
-  "keywords": ["matlab", "octave", "free", "scientific", "3d", "plotting", "figures", "vrml", "lsp", "antigravity"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "matlab",
+    "octave",
+    "free",
+    "antigravity",
+    "3d",
+    "vrml"
+  ],
   "activationEvents": [
     "onLanguage:matlab",
     "onLanguage:octave",
@@ -22,8 +35,15 @@
     "languages": [
       {
         "id": "matlab",
-        "aliases": ["MATLAB", "Octave", "matlab", "octave"],
-        "extensions": [".m"],
+        "aliases": [
+          "MATLAB",
+          "Octave",
+          "matlab",
+          "octave"
+        ],
+        "extensions": [
+          ".m"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -109,12 +129,21 @@
         "matlab-free.defaultColormap": {
           "type": "string",
           "default": "jet",
-          "enum": ["jet", "hot", "cool", "gray", "parula", "viridis"],
+          "enum": [
+            "jet",
+            "hot",
+            "cool",
+            "gray",
+            "parula",
+            "viridis"
+          ],
           "description": "Colormap par défaut pour les figures 3D"
         },
         "matlab-free.extraPath": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Dossiers supplémentaires ajoutés au path Octave au démarrage"
         }
@@ -122,19 +151,21 @@
     }
   },
   "scripts": {
-    "compile":  "tsc -p tsconfig.json",
-    "watch":    "tsc -watch -p tsconfig.json",
-    "package":  "npx vsce package",
-    "lint":     "eslint src --ext .ts"
+    "vscode:prepublish": "npm run package-ext",
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package-ext": "node esbuild.js --production",
+    "package": "npx vsce package --no-dependencies",
+    "lint": "eslint src --ext .ts"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "@types/node":   "^20.0.0",
+    "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
-    "@vscode/vsce":  "^2.22.0",
-    "typescript":    "^5.3.0"
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.3.0"
   }
 }
-

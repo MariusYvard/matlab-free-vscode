@@ -1,5 +1,19 @@
+## Node
 node_modules/
-out/
-*.vsix
+npm-debug.log*
+
+## Build TypeScript
+extension/out/
+extension/*.vsix
+
+## Octave temporaires
 *.m~
+*.oct
+
+## Système
 .DS_Store
+Thumbs.db
+
+## VS Code workspace local
+.vscode/settings.json
+.vscode/launch.json

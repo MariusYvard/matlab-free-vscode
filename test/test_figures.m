@@ -1,8 +1,8 @@
 %% test_figures.m — matlab-free-vscode
-%  Verifie que les fonctions de visualisation interceptees par bootstrap.m
-%  emettent bien une notification MFV sur stdout.
+%  Vérifie que les fonctions de visualisation interceptées par bootstrap.m
+%  émettent bien une notification MFV sur stdout.
 %  Usage : octave --no-gui --eval "run('test/test_figures.m')"
-%  Retour : 0 (succes) ou erreur
+%  Retour : 0 (succès) ou erreur
 
 addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'runtime'));
 run(fullfile(fileparts(mfilename('fullpath')), '..', 'runtime', 'startup.m'));
@@ -19,7 +19,7 @@ function assert_eq(name, a, b)
     end
 end
 
-%% -- Test 1 : plot generates an MFV notification --------------------------
+%% ── Test 1 : plot génère une notification MFV ────────────────────────────
 try
     x = 0:0.1:2*pi;
     plot(x, sin(x));
@@ -30,7 +30,7 @@ catch e
     failed++;
 end
 
-%% -- Test 2 : bar chart ---------------------------------------------------
+%% ── Test 2 : bar chart ───────────────────────────────────────────────────
 try
     bar([1 3 2 4]);
     fprintf('  PASS  bar() intercepted\n');
@@ -40,7 +40,7 @@ catch e
     failed++;
 end
 
-%% -- Test 3 : contour ------------------------------------------------------
+%% ── Test 3 : contour ─────────────────────────────────────────────────────
 try
     [X, Y] = meshgrid(-2:0.2:2);
     Z = X.^2 + Y.^2;
@@ -52,7 +52,7 @@ catch e
     failed++;
 end
 
-%% -- Test 4 : quiver -------------------------------------------------------
+%% ── Test 4 : quiver ──────────────────────────────────────────────────────
 try
     [X, Y] = meshgrid(0:0.5:2);
     U = -Y; V = X;
@@ -64,7 +64,7 @@ catch e
     failed++;
 end
 
-%% -- Test 5 : surf ---------------------------------------------------------
+%% ── Test 5 : surf ────────────────────────────────────────────────────────
 try
     [X, Y] = meshgrid(-2:0.3:2);
     Z = sin(X) .* cos(Y);
@@ -76,7 +76,7 @@ catch e
     failed++;
 end
 
-%% -- Test 6 : scatter ------------------------------------------------------
+%% ── Test 6 : scatter ─────────────────────────────────────────────────────
 try
     scatter(rand(20,1), rand(20,1));
     fprintf('  PASS  scatter() intercepted\n');
@@ -86,7 +86,7 @@ catch e
     failed++;
 end
 
-%% -- Test 7 : imagesc ------------------------------------------------------
+%% ── Test 7 : imagesc ─────────────────────────────────────────────────────
 try
     imagesc(magic(5));
     fprintf('  PASS  imagesc() intercepted\n');
@@ -96,8 +96,8 @@ catch e
     failed++;
 end
 
-%% -- Summary ---------------------------------------------------------------
-fprintf('\n%d tests passed, %d failed.\n', passed, failed);
+%% ── Bilan ─────────────────────────────────────────────────────────────────
+fprintf('\n%d tests passés, %d échoués.\n', passed, failed);
 if failed > 0
-    error('Some tests failed.');
+    error('Des tests ont échoué.');
 end
