@@ -99,16 +99,16 @@ jobs:
             3. Configurez `matlab-free.octavePath` si Octave n'est pas dans votre PATH
                (sur Windows, la détection automatique est tentée en priorité)
 
-            ## Nouveautés v0.2.0
+            ## Nouveautés v0.4.1
 
+            - **Refonte Architecturale Majeure** : Séparation des processus (LSP et exécution) pour une stabilité absolue.
+            - **Auto-Healing** : Le moteur d'exécution redémarre silencieusement en cas de crash, sans bloquer l'éditeur.
+            - **Communication TCP** : Protocole réseau robuste pour le transfert des figures et du workspace (remplace `stdout`).
+            - **Bundling Esbuild** : L'extension est désormais ultra-légère et immunisée contre les dépendances manquantes.
             - Variable Explorer : panneau des variables du workspace en temps réel
             - Export PNG dans les panneaux 2D et 3D
-            - Plein écran pour les figures 3D
-            - contour, contourf, quiver, quiver3, semilogy, semilogx, loglog...
-            - Signature Help (paramètres de fonction en temps réel)
-            - Complétion des champs de struct et des fonctions utilisateur
+            - Signature Help et complétion via Language Server
             - Auto-détection d'Octave sur Windows
-            - Output channel dédié pour la sortie Octave
 
             ## Prérequis
             - [GNU Octave ≥ 7.0](https://octave.org/download)
