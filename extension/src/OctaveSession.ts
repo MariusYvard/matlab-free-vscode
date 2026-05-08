@@ -122,7 +122,7 @@ export class OctaveSession implements vscode.Disposable {
         const initScript = `${addpaths} run('${startupM}');`
 
         this.execProc = cp.spawn(octavePath, [
-            '--no-gui', '--no-line-editing', '--quiet', '--no-history', '--eval', initScript
+            '--no-gui', '--no-line-editing', '--quiet', '--no-history'
         ], {
             stdio: ['pipe', 'pipe', 'pipe'],
             env: { 
@@ -136,6 +136,9 @@ export class OctaveSession implements vscode.Disposable {
             vscode.window.showErrorMessage(`matlab-free: impossible de démarrer le moteur d'exécution.`)
             return false
         }
+
+        // Send startup script to interactive stdin
+        this.execProc.stdin.write(initScript + '\n')
 
         // Stdout fallback routing (if TCP fails) and normal disp() output
         this.execProc.stdout!.on('data', (chunk: Buffer) => this.parser.feed(chunk))

@@ -2,7 +2,7 @@
   "name": "matlab-free-vscode",
   "displayName": "MATLAB / Octave (Free)",
   "description": "Code MATLAB/Octave gratuitement dans VS Code et Antigravity — sans licence MATLAB.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "publisher": "MariusYvard",
   "license": "MIT",
   "repository": {
