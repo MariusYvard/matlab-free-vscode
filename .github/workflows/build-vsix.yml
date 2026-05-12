@@ -23,18 +23,7 @@ jobs:
         run: octave --no-gui --eval "run('test/test_compat.m')"
 
       - name: Run figure interception tests (headless)
-        run: |
-          octave --no-gui --eval "
-            % Tests headless : on ne peut pas afficher de GUI,
-            % mais on peut vérifier que les fonctions existent et s'exécutent.
-            cd('${GITHUB_WORKSPACE}');
-            addpath(fullfile(pwd(), 'runtime'));
-            run(fullfile(pwd(), 'runtime', 'startup.m'));
-            x = 0:0.1:1;
-            try, plot(x, x.^2); disp('plot OK'); catch e, error(e.message); end
-            try, bar([1 2 3]);   disp('bar OK');  catch e, error(e.message); end
-            disp('All headless figure tests passed.')
-          "
+        run: octave --no-gui --eval "run('test/test_figures.m')"
 
   build:
     needs: test
@@ -99,16 +88,14 @@ jobs:
             3. Configurez `matlab-free.octavePath` si Octave n'est pas dans votre PATH
                (sur Windows, la détection automatique est tentée en priorité)
 
-            ## Nouveautés v0.4.1
+            ## Nouveautés v0.5.0
 
-            - **Refonte Architecturale Majeure** : Séparation des processus (LSP et exécution) pour une stabilité absolue.
-            - **Auto-Healing** : Le moteur d'exécution redémarre silencieusement en cas de crash, sans bloquer l'éditeur.
-            - **Communication TCP** : Protocole réseau robuste pour le transfert des figures et du workspace (remplace `stdout`).
-            - **Bundling Esbuild** : L'extension est désormais ultra-légère et immunisée contre les dépendances manquantes.
-            - Variable Explorer : panneau des variables du workspace en temps réel
-            - Export PNG dans les panneaux 2D et 3D
-            - Signature Help et complétion via Language Server
-            - Auto-détection d'Octave sur Windows
-
-            ## Prérequis
-            - [GNU Octave ≥ 7.0](https://octave.org/download)
+            Corrections de bugs critiques :
+            - Interception des figures réparée. `bootstrap.m` définissait `plot`, `surf`, `mesh`... comme fonctions internes à un script. Octave ne les exposait pas globalement, donc aucun appel utilisateur n'était intercepté et aucune figure n'arrivait dans VS Code. Chaque override vit maintenant dans son propre fichier `.m` du dossier runtime/.
+            - Helper `__mfv_call_real__` qui appelle la fonction Octave native via rmpath/addpath temporaire (remplace `builtin()` qui plantait sur `plot`, `surf`, etc. car ces noms ne sont pas de vrais builtins Octave).
+            - Output channel : la sortie `disp()` du moteur d'exécution s'affiche enfin (MsgParser émettait `'lsp'` au lieu de `'text'`).
+            - LSP : la subfunction locale `__mfv_notify__` de `lsp_loop.m` corrompait le framing JSON-RPC en écrivant sur stdout. Supprimée au profit du fichier `__mfv_notify__.m` qui passe par TCP. Le Variable Explorer fonctionne désormais.
+            - Parsing URI du workspace robuste sur Linux/macOS (chemin absolu préservé).
+            - `runFile` accepte `octave` en plus de `matlab`. Apostrophes échappées.
+            - Handle de figure forcé en `Number` pour éviter les clés dupliquées dans `FigurePanel.panels`.
+            - Tests CI : `test_figures.m` vérifie maintenant la présence de la bali

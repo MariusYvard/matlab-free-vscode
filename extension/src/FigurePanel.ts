@@ -13,6 +13,8 @@ export class FigurePanel {
     static readonly panels = new Map<number, FigurePanel>()
 
     static show(handle: number, svgPath: string): void {
+        handle = Number(handle)
+        if (!Number.isFinite(handle)) handle = 1
         const col      = vscode.ViewColumn.Beside
         const existing = FigurePanel.panels.get(handle)
 

@@ -68,10 +68,20 @@ while ~shutdown_req
         % ── Cycle de vie ──────────────────────────────────────────────
         case 'initialize'
             initialized = true;
-            % Récupère le répertoire racine du workspace
+            % Récupère le répertoire racine du workspace.
+            % Sur Windows on a "file:///C:/...", sur Unix "file:///home/...".
+            % Décodage minimal des %XX et normalisation du séparateur.
             if isfield(msg.params, 'rootUri') && ~isempty(msg.params.rootUri)
-                workspace_dir = strrep(msg.params.rootUri, 'file:///', '');
-                workspace_dir = strrep(workspace_dir, 'file://', '');
+                u = msg.params.rootUri;
+                if strncmp(u, 'file://', 7), u = u(8:end); end
+                if length(u) >= 1 && u(1) == '/', u = u(2:end); end
+                if length(u) >= 3 && u(2) == ':'
+                    % Windows : "C:/foo" passe tel quel
+                else
+                    % Unix : on remet le slash initial
+                    u = ['/' u];
+                end
+                workspace_dir = u;
                 if ispc()
                     workspace_dir = strrep(workspace_dir, '/', filesep());
                 end
@@ -587,10 +597,8 @@ function word = __word_at__(text, line_idx, char_idx)
 end
 
 %% ── Helper notification MFV ──────────────────────────────────────────────────
-function __mfv_notify__(payload)
-    try
-        fprintf(stdout, '\n__MFV__%s__MFV__\n', jsonencode(payload));
-        fflush(stdout);
-    catch
-    end
-end
+%  Anciennement défini ici comme subfunction écrivant sur stdout. Cette version
+%  corrompait le framing LSP (le stdout du process LSP est lu par le
+%  LanguageClient). On utilise désormais __mfv_notify__.m du dossier runtime/,
+%  ajouté au path par OctaveSession.ts, qui envoie via TCP au serveur de
+%  l'extension.

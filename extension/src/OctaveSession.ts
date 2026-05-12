@@ -138,7 +138,7 @@ export class OctaveSession implements vscode.Disposable {
         }
 
         // Send startup script to interactive stdin
-        this.execProc.stdin.write(initScript + '\n')
+        this.execProc.stdin!.write(initScript + '\n')
 
         // Stdout fallback routing (if TCP fails) and normal disp() output
         this.execProc.stdout!.on('data', (chunk: Buffer) => this.parser.feed(chunk))
@@ -170,12 +170,16 @@ export class OctaveSession implements vscode.Disposable {
         // Wait, if execProc doesn't run lsp_loop, it doesn't parse JSON-RPC!
         // To fix this, we just write the raw code to execProc stdin + newline!
         // But let's wrap it in an eval or just write it.
-        this.execProc.stdin.write(code + '\n')
+        this.execProc.stdin!.write(code + '\n')
     }
 
     private dispatch(msg: MfvMessage): void {
         switch (msg.type) {
-            case 'figure': FigurePanel.show(msg.handle ?? 1, msg.path); break;
+            case 'figure': {
+                const handle = Number(msg.handle ?? 1)
+                FigurePanel.show(Number.isFinite(handle) ? handle : 1, msg.path)
+                break
+            }
             case 'patch': case 'surf': case '3d': ThreeDPanel.show(`fig_${Date.now()}`, msg as any); break;
             case 'colormap': case 'colorbar': case 'camlight': case 'lighting': ThreeDPanel.broadcast(msg); break;
             case 'title': ThreeDPanel.setTitle(msg.text ?? ''); break;

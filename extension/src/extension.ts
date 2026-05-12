@@ -71,8 +71,13 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('matlab-free.runFile', () => {
             const editor = vscode.window.activeTextEditor
-            if (!editor || editor.document.languageId !== 'matlab') return
-            const filePath = editor.document.uri.fsPath.replace(/\\/g, '/')
+            if (!editor) return
+            if (editor.document.languageId !== 'matlab' &&
+                editor.document.languageId !== 'octave') return
+            // Échappe les apostrophes pour Octave : 'foo''bar.m'
+            const filePath = editor.document.uri.fsPath
+                .replace(/\\/g, '/')
+                .replace(/'/g, "''")
             session?.sendCommand(`run('${filePath}')`)
         })
     )
