@@ -1,7 +1,7 @@
 %% test_figures.m  matlab-free-vscode
 %  Vérifie que les fonctions de visualisation interceptées par les fichiers
 %  runtime/<fn>.m émettent bien une notification MFV (balise __MFV__) sur
-%  stdout (fallback) ou via TCP.
+%  stdout (fallback).
 %
 %  Usage : octave --no-gui --eval "run('test/test_figures.m')"
 
@@ -28,26 +28,6 @@ else
     failed = failed + 1;
 end
 
-%% Helper local : exécute une expression et vérifie que la sortie contient __MFV__
-%  (Octave permet les subfunctions dans un script tant qu'on les appelle
-%   depuis le script lui-même.)
-function ok = expect_mfv(name, expr)
-    try
-        out = evalc(expr);
-    catch e
-        fprintf('  FAIL  %s : %s\n', name, e.message);
-        ok = false;
-        return;
-    end
-    if ~isempty(strfind(out, '__MFV__'))
-        fprintf('  PASS  %s\n', name);
-        ok = true;
-    else
-        fprintf('  FAIL  %s : aucune balise __MFV__ dans la sortie\n', name);
-        ok = false;
-    end
-end
-
 % Désactive l'affichage graphique pour les tests headless
 graphics_toolkit('gnuplot');
 setenv('GNUTERM', 'dumb');
@@ -65,12 +45,25 @@ cases = { ...
 };
 
 for k = 1:size(cases,1)
-    if expect_mfv(cases{k,1}, cases{k,2})
-        passed = passed + 1;
-    else
+    name = cases{k,1};
+    expr = cases{k,2};
+    try
+        out = evalc(expr);
+        if ~isempty(strfind(out, '__MFV__'))
+            fprintf('  PASS  %s\n', name);
+            passed = passed + 1;
+        else
+            fprintf('  FAIL  %s : aucune balise __MFV__ dans la sortie\n', name);
+            failed = failed + 1;
+        end
+    catch e
+        fprintf('  FAIL  %s : %s\n', name, e.message);
         failed = failed + 1;
     end
     close all;
 end
 
-fprintf('\n%d tests passés, %d échoués.\n', passed,
+fprintf('\n%d tests passés, %d échoués.\n', passed, failed);
+if failed > 0
+    error('Des tests ont échoué.');
+end
